@@ -1,17 +1,23 @@
 from mysql.connector import connect, Error
 import os
+from pytube import YouTube
 
+
+# list of commands
 create_database = "CREATE DATABASE graphic_balance"
-create_table = "CREATE TABLE channels (id int PRIMARY KEY AUTO_INCREMENT, name VARCHAR(255), curl VARCHAR(255), download_date DATE)"
+create_table = "CREATE TABLE channels (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(255), curl VARCHAR(255), download_date DATE)"
+create_tag_table = "CREATE TABLE tags (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(255))"
+create_assoc_table = "CREATE TABLE channels_tags (channel_id INT, tag_id INT, FOREIGN KEY(channel_id) REFERENCES channels(id), FOREIGN KEY(tag_id) REFERENCES tags(id)"
 create_table_tags = "CREATE TABLE tags (videoId int PRIMARY KEY, FOREIGN KEY(videoId) REFERENCES channels(id), "
-insert_sql = "INSERT INTO channels (name, download_date) VALUES (%s, %s)"
+insert_channels = "INSERT INTO channels (name, curl, download_date) VALUES (%s, %s, %s)"
 
-#read from database
+
+#write to database from folder structure
 try:
     with connect(
         host="localhost",
-        user=os.environ["USER"],
-        password=os.environ["PASSWORD"],
+        user="root",
+        password="Gr33nie1",
         database="graphic_balance"
     ) as connection:
         sql = create_database
@@ -29,14 +35,26 @@ try:
                         pass
                     else:
                         with connection.cursor() as cursor:
-                            # channel url from first file name in channel folder
+                            # channel url from first file name Youtube ID in channel folder
                             channel_file = os.listdir(base_path + folder + "/channels/" + channel)[0]
-                            curl = channel_file.split("_")[2]
-                            # date reformat to YYYY_MM_DD
-                            folder_date = "20" + folder[-2:] + "-" + folder[:2] + "-" + folder.split('_')[1]
-                            # execute and save sql script
-                            cursor.execute(sql, (channel, folder_date))
-                            connection.commit()
+                            # Pull video ID from beginning of file name string
+                            video_id = channel_file.split("_")[0]
+                            # Rule out undefined or missing video_id
+                            if len(video_id) != 11:
+                                curl = "url undefined"
+                            else:
+                                # Retrieve respective channel ID number using pytube Youtube object
+                                url = "https://www.youtube.com/watch?v=" + video_id
+                                x = YouTube(url)
+                                curl = x.channel_id
+                                # date reformat to YYYY_MM_DD
+                                folder_date = "20" + folder[-2:] + "-" + folder[:2] + "-" + folder.split('_')[1]
+                                # execute and save sql script
+                                cursor.execute(insert_channels, (channel, curl, folder_date))
+                                # Save changes to database
+                                connection.commit()
+
+
 except Error as e:
     print(e)
 
